@@ -100,7 +100,7 @@
 </head>
 <body class="bg-secondary min-h-screen font-cute text-text antialiased">
     <!-- 登录页面（优先渲染，优化加载速度） -->
-    <div id="loginPage" class="flex flex-col items-center justify-center min-h-screen px-4 page-fade">
+    <div id="loginPage" class="flex flex-col items-center justify-center min-h-screen px-4 page-fade hidden">
         <div class="fluffy-card p-8 w-full max-w-md transform hover:scale-[1.01]">
             <h1 class="text-[clamp(1.8rem,4vw,2.5rem)] text-primary text-center mb-6 font-bold">
                 <i class="fa fa-paper-plane-o mr-2 animate-pulse"></i>旅游日记小窝
@@ -216,12 +216,13 @@
     <script>
         // 全局变量
         let currentUser = '';
-        let accountData = {
-            // 本地测试账号兜底（无Excel时也能登录）
+        // 【核心修复1】保留测试账号作为兜底，Excel加载时合并（而非覆盖）
+        const DEFAULT_ACCOUNT_DATA = {
             '蝎子莱莱': {
                 备忘录: '2026年计划去云南旅游～\n三亚之旅记得带防晒霜！'
             }
-        }; 
+        };
+        let accountData = { ...DEFAULT_ACCOUNT_DATA }; // 深拷贝兜底数据，避免被清空
         let travelDiaryData = [
             // 本地测试日记数据（仅Excel加载失败时显示）
             {
@@ -275,34 +276,95 @@
             return `https://picsum.photos/seed/${encodedCity}/800/600`;
         }
 
-        // ========== 登录逻辑（优先读取Excel数据，优化加载不阻塞登录） ==========
-        document.getElementById('loginBtn').addEventListener('click', async () => {
+        // ========== Excel读取逻辑（核心修复2：合并数据而非覆盖，保留测试账号） ==========
+        async function loadExcelData() {
+            console.log('开始加载Excel文件：', EXCEL_FILE_URL);
+            // 增加请求超时处理（避免无限等待）
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+
+            try {
+                const response = await fetch(EXCEL_FILE_URL, {
+                    signal: controller.signal,
+                    method: 'GET',
+                    cache: 'no-cache' // 禁用缓存，确保读取最新文件
+                });
+                
+                clearTimeout(timeoutId); // 清除超时
+                
+                if (!response.ok) {
+                    throw new Error(`文件请求失败 [${response.status}] ${response.statusText}\n路径：${EXCEL_FILE_URL}`);
+                }
+                
+                const arrayBuffer = await response.arrayBuffer();
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+
+                // 解析账号信息（sheet1）- 【核心修复】合并数据，而非清空
+                if (workbook.Sheets['账号信息']) {
+                    const accountSheet = workbook.Sheets['账号信息'];
+                    const accountJson = XLSX.utils.sheet_to_json(accountSheet);
+                    accountJson.forEach(item => {
+                        if (item.专属账号) {
+                            // 合并：Excel中的账号覆盖兜底，未覆盖的兜底账号保留
+                            accountData[item.专属账号] = {
+                                备忘录: item.备忘录 || '暂无备忘录～'
+                            };
+                        }
+                    });
+                    console.log('Excel账号信息合并完成：', accountData);
+                }
+
+                // 解析旅游日记（sheet2）- 强制替换测试数据（如果有数据）
+                if (workbook.Sheets['旅游日记']) {
+                    const diarySheet = workbook.Sheets['旅游日记'];
+                    const excelDiaryData = XLSX.utils.sheet_to_json(diarySheet);
+                    // 仅当Excel中有数据时替换
+                    if (excelDiaryData.length > 0) {
+                        travelDiaryData = excelDiaryData;
+                    }
+                    console.log('Excel旅游日记读取成功：', travelDiaryData);
+                }
+            } catch (err) {
+                clearTimeout(timeoutId); // 清除超时
+                // 【核心修复】Excel加载失败时，保留原有测试数据，不清空
+                console.error('Excel加载失败详情：', err);
+                // 抛出错误但不影响后续流程
+                throw new Error(
+                    err.name === 'AbortError' ? 'Excel文件请求超时（超过10秒），请检查网络或文件大小' :
+                    err.message.includes('Failed to fetch') ? '无法访问Excel文件（跨域/文件不存在/路径错误）' :
+                    err.message
+                );
+            }
+        }
+
+        // ========== 登录逻辑（核心修复3：先加载Excel再验证账号，保留兜底） ==========
+        async function handleLogin() {
             const account = document.getElementById('accountInput').value.trim();
             if (!account) {
                 alert('请输入专属账号～');
                 return;
             }
 
-            // 第一步：先验证账号是否存在（本地兜底+Excel）
-            if (!accountData[account]) {
-                alert('账号不存在哦～请输入"蝎子莱莱"测试');
-                return;
-            }
-
-            // 第二步：显示加载状态
+            // 第一步：显示加载状态
             const loginBtn = document.getElementById('loginBtn');
             const originalBtnText = loginBtn.innerHTML;
             loginBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i>正在进入...';
             loginBtn.disabled = true;
 
             try {
-                // 第三步：尝试读取Excel（失败也不影响登录，增加详细错误日志）
+                // 第二步：优先加载Excel（失败则保留兜底数据）
                 await loadExcelData().catch(err => {
-                    console.error('Excel加载失败详情：', err);
-                    alert(`Excel加载失败（本地测试模式）：${err.message}\n请检查文件路径是否正确，文件是否存在`);
+                    console.warn('Excel加载失败，使用兜底测试数据：', err);
+                    alert(`Excel加载失败（使用本地测试模式）：${err.message}`);
                 });
 
-                // 第四步：登录成功，显示主页面（优先渲染，不等待地图）
+                // 第三步：验证账号（此时accountData已合并Excel+兜底数据）
+                if (!accountData[account]) {
+                    alert(`账号「${account}」不存在哦～请输入"蝎子莱莱"测试`);
+                    return;
+                }
+
+                // 第四步：登录成功，显示主页面
                 currentUser = account;
                 document.getElementById('currentAccount').textContent = account;
                 document.getElementById('loginPage').classList.add('hidden');
@@ -329,74 +391,6 @@
                 // 恢复按钮状态
                 loginBtn.innerHTML = originalBtnText;
                 loginBtn.disabled = false;
-            }
-        });
-
-        // 回车登录
-        document.getElementById('accountInput').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                document.getElementById('loginBtn').click();
-            }
-        });
-
-        // ========== Excel读取逻辑（修复路径+增加详细错误处理） ==========
-        async function loadExcelData() {
-            console.log('开始加载Excel文件：', EXCEL_FILE_URL);
-            // 增加请求超时处理（避免无限等待）
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
-
-            try {
-                const response = await fetch(EXCEL_FILE_URL, {
-                    signal: controller.signal,
-                    method: 'GET',
-                    cache: 'no-cache' // 禁用缓存，确保读取最新文件
-                });
-                
-                clearTimeout(timeoutId); // 清除超时
-                
-                if (!response.ok) {
-                    throw new Error(`文件请求失败 [${response.status}] ${response.statusText}\n路径：${EXCEL_FILE_URL}`);
-                }
-                
-                const arrayBuffer = await response.arrayBuffer();
-                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-
-                // 解析账号信息（sheet1）
-                if (workbook.Sheets['账号信息']) {
-                    const accountSheet = workbook.Sheets['账号信息'];
-                    const accountJson = XLSX.utils.sheet_to_json(accountSheet);
-                    accountData = {};
-                    accountJson.forEach(item => {
-                        if (item.专属账号) {
-                            accountData[item.专属账号] = {
-                                备忘录: item.备忘录 || '暂无备忘录～'
-                            };
-                        }
-                    });
-                    console.log('账号信息读取成功：', accountData);
-                }
-
-                // 解析旅游日记（sheet2）- 强制替换测试数据
-                if (workbook.Sheets['旅游日记']) {
-                    const diarySheet = workbook.Sheets['旅游日记'];
-                    const excelDiaryData = XLSX.utils.sheet_to_json(diarySheet);
-                    // 仅当Excel中有数据时替换
-                    if (excelDiaryData.length > 0) {
-                        travelDiaryData = excelDiaryData;
-                    }
-                    console.log('旅游日记读取成功：', travelDiaryData);
-                }
-            } catch (err) {
-                clearTimeout(timeoutId); // 清除超时
-                // 分类错误提示，方便排查
-                if (err.name === 'AbortError') {
-                    throw new Error('Excel文件请求超时（超过10秒），请检查网络或文件大小');
-                } else if (err.message.includes('Failed to fetch')) {
-                    throw new Error('无法访问Excel文件（跨域/文件不存在/路径错误）');
-                } else {
-                    throw new Error(err.message);
-                }
             }
         }
 
@@ -570,31 +564,42 @@
             memoContent.value = accountData[currentUser]?.备忘录 || '暂无备忘录～';
         }
 
-        // 打开备忘录
-        document.getElementById('memoBtn').addEventListener('click', () => {
-            document.getElementById('memoModal').classList.remove('hidden');
-        });
-
-        // 关闭备忘录
-        document.getElementById('closeMemoBtn').addEventListener('click', () => {
-            document.getElementById('memoModal').classList.add('hidden');
-        });
-
-        // 点击空白处关闭备忘录
-        document.getElementById('memoModal').addEventListener('click', (e) => {
-            if (e.target === document.getElementById('memoModal')) {
-                document.getElementById('memoModal').classList.add('hidden');
-            }
-        });
-
-        // ========== 适配与优化（核心修改2：优化页面加载速度） ==========
-        // 优先渲染登录页面，不等待任何资源
+        // ========== DOM事件绑定（核心修复4：确保DOM加载完成后绑定） ==========
         document.addEventListener('DOMContentLoaded', () => {
+            // 显示登录页面
             document.getElementById('loginPage').classList.remove('hidden');
             document.getElementById('accountInput').value = '';
             console.log('登录页面已优先渲染完成');
+
+            // 绑定登录按钮点击事件
+            document.getElementById('loginBtn').addEventListener('click', handleLogin);
+
+            // 绑定回车登录事件（核心修复5：DOM加载后绑定，避免失效）
+            document.getElementById('accountInput').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    handleLogin();
+                }
+            });
+
+            // 打开备忘录
+            document.getElementById('memoBtn').addEventListener('click', () => {
+                document.getElementById('memoModal').classList.remove('hidden');
+            });
+
+            // 关闭备忘录
+            document.getElementById('closeMemoBtn').addEventListener('click', () => {
+                document.getElementById('memoModal').classList.add('hidden');
+            });
+
+            // 点击空白处关闭备忘录
+            document.getElementById('memoModal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('memoModal')) {
+                    document.getElementById('memoModal').classList.add('hidden');
+                }
+            });
         });
 
+        // 窗口大小调整时重置地图
         window.addEventListener('resize', () => {
             if (map) {
                 setTimeout(() => map.resize(), 100);
