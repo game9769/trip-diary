@@ -103,6 +103,30 @@
                 70% { box-shadow: 0 0 0 10px rgba(255, 107, 158, 0); }
                 100% { box-shadow: 0 0 0 0 rgba(255, 107, 158, 0); }
             }
+            /* 搜索框样式 */
+            .search-box {
+                position: relative;
+                margin-bottom: 1rem;
+            }
+            .search-input {
+                padding-left: 2.5rem;
+                padding-right: 2.5rem;
+            }
+            .search-icon {
+                position: absolute;
+                left: 0.75rem;
+                top: 50%;
+                transform: translateY(-50%);
+                color: #ff7aa2;
+            }
+            .clear-icon {
+                position: absolute;
+                right: 0.75rem;
+                top: 50%;
+                transform: translateY(-50%);
+                color: #ff7aa2;
+                cursor: pointer;
+            }
         }
     </style>
     <script>
@@ -158,7 +182,7 @@
             <div class="flex items-center gap-2">
                 <!-- 可爱头像 -->
                 <div class="w-12 h-12 rounded-full bg-gradient-to-r from-pink-300 to-purple-300 flex items-center justify-center overflow-hidden border-3 border-white shadow-lg">
-                    <img src="https://cdn-icons-png.flaticon.com/512/3237/3237472.png" alt="可爱头像" class="w-10 h-10 object-cover">
+                    <img src="https://cdn-icons-png.flaticon.com/512/2118/2118625.png" alt="可爱头像" class="w-10 h-10 object-cover">
                 </div>
                 <span class="text-lg font-medium" id="currentAccount">蝎子莱莱</span>
             </div>
@@ -206,7 +230,16 @@
                 <h2 class="text-xl text-primary font-bold mb-4 flex items-center gap-2">
                     <i class="fa fa-calendar"></i>旅游日记
                 </h2>
-                <div id="travelDiaryList" class="space-y-5 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                <!-- 搜索功能 -->
+                <div class="search-box mb-4">
+                    <input type="text" id="diarySearch" 
+                           class="w-full p-3 rounded-lg border border-primary/30 fluffy-border focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-all search-input"
+                           placeholder="搜索日记名称...">
+                    <i class="fa fa-search search-icon"></i>
+                    <i class="fa fa-times clear-icon hidden" id="clearSearch"></i>
+                </div>
+                
+                <div id="travelDiaryList" class="space-y-5 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                     <!-- 测试日记卡片（仅Excel加载失败时显示） -->
                     <div class="fluffy-card p-4 transition-all hover:shadow-cute hover:-translate-y-1">
                         <h3 class="font-bold text-primary text-lg mb-3">三亚之旅</h3>
@@ -299,6 +332,7 @@
             "https://game9769.github.io/trip-diary/%E6%88%91%E5%92%8C%E8%95%BE%E8%95%BE%E7%9A%84%E6%97%85%E6%B8%B8%E6%97%A5%E8%AE%B0.xlsx"
         ];
         const DEFAULT_IMAGE = 'https://picsum.photos/800/600?random=1';
+        let allCities = []; // 存储所有需要高亮的城市
 
         // ========== 日期格式化函数（修复日期展示格式，增加类型检查） ==========
         function formatTravelDate(dateStr) {
@@ -526,7 +560,7 @@
             });
 
             // 收集所有需要高亮的城市（处理顿号分隔）
-            let allCities = [];
+            allCities = [];
             travelDiaryData.forEach(item => {
                 if (item.关联城市) {
                     // 拆分顿号分隔的城市
@@ -644,16 +678,18 @@
         }
 
         // ========== 旅游日记渲染（修复日期格式+图片显示问题） ==========
-        function renderTravelDiary() {
+        function renderTravelDiary(filteredData = null) {
             const listContainer = document.getElementById('travelDiaryList');
             listContainer.innerHTML = '';
 
-            if (travelDiaryData.length === 0) {
+            const dataToRender = filteredData || travelDiaryData;
+
+            if (dataToRender.length === 0) {
                 listContainer.innerHTML = '<div class="text-center text-gray-500 py-8">暂无旅游日记～</div>';
                 return;
             }
 
-            travelDiaryData.forEach((item) => {
+            dataToRender.forEach((item) => {
                 const card = document.createElement('div');
                 card.className = 'fluffy-card p-4 transition-all hover:shadow-cute hover:-translate-y-1';
                 // 获取图片（优先用关联城市生成）
@@ -684,6 +720,38 @@
                     ` : ''}
                 `;
                 listContainer.appendChild(card);
+            });
+        }
+
+        // ========== 搜索功能 ==========
+        function setupSearchFunctionality() {
+            const searchInput = document.getElementById('diarySearch');
+            const clearIcon = document.getElementById('clearSearch');
+            
+            // 搜索事件
+            searchInput.addEventListener('input', (e) => {
+                const searchTerm = e.target.value.toLowerCase();
+                
+                if (searchTerm) {
+                    clearIcon.classList.remove('hidden');
+                    // 过滤日记
+                    const filteredData = travelDiaryData.filter(item => 
+                        item.日记名称.toLowerCase().includes(searchTerm) ||
+                        item.关联城市.toLowerCase().includes(searchTerm)
+                    );
+                    renderTravelDiary(filteredData);
+                } else {
+                    clearIcon.classList.add('hidden');
+                    renderTravelDiary(); // 显示全部日记
+                }
+            });
+            
+            // 清空搜索
+            clearIcon.addEventListener('click', () => {
+                searchInput.value = '';
+                clearIcon.classList.add('hidden');
+                renderTravelDiary(); // 显示全部日记
+                searchInput.focus();
             });
         }
 
@@ -725,6 +793,9 @@
                     document.getElementById('memoModal').classList.add('hidden');
                 }
             });
+            
+            // 设置搜索功能
+            setupSearchFunctionality();
         });
 
         // 窗口大小调整时重置地图
