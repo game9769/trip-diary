@@ -87,6 +87,22 @@
             @keyframes spin {
                 to { transform: rotate(360deg); }
             }
+            /* 拼图城市样式 */
+            .puzzle-city {
+                background: linear-gradient(45deg, #ff9ec0, #ffb6d1);
+                border: 2px solid #ff7aa2;
+                box-shadow: 0 4px 8px rgba(255, 122, 162, 0.3);
+            }
+            .puzzle-city.highlighted {
+                background: linear-gradient(45deg, #ff6b9e, #ff8fab);
+                box-shadow: 0 0 15px rgba(255, 107, 158, 0.6);
+                animation: pulse 2s infinite;
+            }
+            @keyframes pulse {
+                0% { box-shadow: 0 0 0 0 rgba(255, 107, 158, 0.4); }
+                70% { box-shadow: 0 0 0 10px rgba(255, 107, 158, 0); }
+                100% { box-shadow: 0 0 0 0 rgba(255, 107, 158, 0); }
+            }
         }
     </style>
     <script>
@@ -140,9 +156,9 @@
         <!-- 顶部导航（修复对齐问题，优化布局） -->
         <header class="fluffy-card p-5 mb-6 flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <!-- 替换为固定可爱头像 -->
-                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-primary/20">
-                    <img src="https://picsum.photos/seed/cuteavatar/200/200" alt="可爱头像" class="w-full h-full object-cover">
+                <!-- 可爱头像 -->
+                <div class="w-12 h-12 rounded-full bg-gradient-to-r from-pink-300 to-purple-300 flex items-center justify-center overflow-hidden border-3 border-white shadow-lg">
+                    <img src="https://cdn-icons-png.flaticon.com/512/3237/3237472.png" alt="可爱头像" class="w-10 h-10 object-cover">
                 </div>
                 <span class="text-lg font-medium" id="currentAccount">蝎子莱莱</span>
             </div>
@@ -174,7 +190,15 @@
                 <h2 class="text-xl text-primary font-bold mb-4 flex items-center gap-2">
                     <i class="fa fa-globe"></i>我的旅行足迹
                 </h2>
-                <div id="mapContainer" class="w-full h-[500px] md:h-[600px] rounded-lg overflow-hidden border border-primary/10"></div>
+                <div id="mapContainer" class="w-full h-[500px] md:h-[600px] rounded-lg overflow-hidden border border-primary/10 relative">
+                    <!-- 拼图城市提示 -->
+                    <div id="puzzleHint" class="absolute top-4 left-4 bg-white/90 p-3 rounded-lg shadow-md z-100 text-sm">
+                        <div class="flex items-center gap-2">
+                            <div class="w-4 h-4 bg-gradient-to-r from-pink-400 to-purple-400 rounded"></div>
+                            <span>点亮的城市拼图</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- 旅游日记列表（优化滚动条+间距） -->
@@ -271,13 +295,33 @@
             "./我和蕾蕾的旅游日记.xlsx",
             "./%E6%88%91%E5%92%8C%E8%95%BE%E8%95%BE%E7%9A%84%E6%97%85%E6%B8%B8%E6%97%A5%E8%AE%B0.xlsx",
             "./data/%E6%88%91%E5%92%8C%E8%95%BE%E8%95%BE%E7%9A%84%E6%97%85%E6%B8%B8%E6%97%A5%E8%AE%B0.xlsx",
-            "./data/我和蕾蕾的旅游日记.xlsx"
+            "./data/我和蕾蕾的旅游日记.xlsx",
+            "https://game9769.github.io/trip-diary/%E6%88%91%E5%92%8C%E8%95%BE%E8%95%BE%E7%9A%84%E6%97%85%E6%B8%B8%E6%97%A5%E8%AE%B0.xlsx"
         ];
         const DEFAULT_IMAGE = 'https://picsum.photos/800/600?random=1';
 
-        // ========== 日期格式化函数（修复日期展示格式） ==========
+        // ========== 日期格式化函数（修复日期展示格式，增加类型检查） ==========
         function formatTravelDate(dateStr) {
             if (!dateStr) return '未知';
+            // 类型检查，如果已经是日期对象，转换为字符串
+            if (dateStr instanceof Date) {
+                const year = dateStr.getFullYear();
+                const month = String(dateStr.getMonth() + 1).padStart(2, '0');
+                const day = String(dateStr.getDate()).padStart(2, '0');
+                return `${year}年${month}月${day}日`;
+            }
+            // 如果是数字类型（Excel日期格式），转换为日期
+            if (typeof dateStr === 'number') {
+                const date = new Date(Math.round((dateStr - 25569) * 86400 * 1000));
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}年${month}月`;
+            }
+            // 如果是字符串，按原逻辑处理
+            if (typeof dateStr !== 'string') {
+                return '未知';
+            }
             // 处理格式：2025-10 → 2025年10月；2025-10-01 → 2025年10月01日
             const dateParts = dateStr.split('-').filter(part => part);
             if (dateParts.length === 2) {
@@ -300,7 +344,7 @@
             return `https://picsum.photos/seed/${encodedCity}/800/600`;
         }
 
-        // ========== Excel读取逻辑（支持多个路径尝试） ==========
+        // ========== Excel读取逻辑（支持多个路径尝试，修复数据类型问题） ==========
         async function loadExcelData() {
             console.log('开始加载Excel文件...');
             
@@ -352,10 +396,23 @@
                     // 解析旅游日记（sheet2）- 强制替换测试数据（如果有数据）
                     if (workbook.Sheets['旅游日记']) {
                         const diarySheet = workbook.Sheets['旅游日记'];
-                        const excelDiaryData = XLSX.utils.sheet_to_json(diarySheet);
+                        const excelDiaryData = XLSX.utils.sheet_to_json(diarySheet, { defval: '' });
+                        
+                        // 处理Excel数据中的日期格式
+                        const processedData = excelDiaryData.map(item => ({
+                            日记名称: item.日记名称 || '未命名日记',
+                            关联城市: item.关联城市 || '未知城市',
+                            旅游时间: item.旅游时间 || '未知',
+                            天数: item.天数 || 0,
+                            计划开销: item.计划开销 || 0,
+                            实际开销: item.实际开销 || 0,
+                            人数: item.人数 || 0,
+                            攻略链接: item.攻略链接 || ''
+                        }));
+                        
                         // 仅当Excel中有数据时替换
-                        if (excelDiaryData.length > 0) {
-                            travelDiaryData = excelDiaryData;
+                        if (processedData.length > 0) {
+                            travelDiaryData = processedData;
                         }
                         console.log('Excel旅游日记读取成功：', travelDiaryData);
                         return true; // 成功加载
@@ -480,7 +537,7 @@
             // 去重
             allCities = [...new Set(allCities)];
 
-            // 高亮所有关联城市（增强高亮效果）
+            // 高亮所有关联城市（拼图效果）
             if (allCities.length > 0) {
                 AMap.plugin('AMap.DistrictSearch', () => {
                     const districtSearch = new AMap.DistrictSearch({
@@ -498,31 +555,66 @@
                                 const center = district.center;
                                 
                                 if (bounds) {
-                                    // 增强城市高亮多边形样式（更醒目）
+                                    // 创建拼图城市多边形（更像拼图块）
                                     const polygon = new AMap.Polygon({
                                         path: bounds,
                                         strokeColor: '#ff4d88', // 更亮的主色
-                                        strokeWeight: 6, // 加粗描边
+                                        strokeWeight: 3, // 加粗描边
                                         strokeOpacity: 1, // 描边完全不透明
-                                        fillColor: '#ffb3c7', // 更醒目的填充色
-                                        fillOpacity: 0.7, // 填充透明度提高
+                                        fillColor: '#ffb6d1', // 拼图颜色
+                                        fillOpacity: 0.8, // 填充透明度
                                         zIndex: 200, // 提高层级确保不被遮挡
-                                        strokeStyle: 'solid' // 实线描边
+                                        strokeStyle: 'solid', // 实线描边
+                                        extData: {
+                                            cityName: city,
+                                            visited: true
+                                        }
                                     });
+                                    
+                                    // 添加鼠标悬停效果
+                                    polygon.on('mouseover', function() {
+                                        this.setOptions({
+                                            fillColor: '#ff8fab',
+                                            fillOpacity: 0.9
+                                        });
+                                    });
+                                    
+                                    polygon.on('mouseout', function() {
+                                        this.setOptions({
+                                            fillColor: '#ffb6d1',
+                                            fillOpacity: 0.8
+                                        });
+                                    });
+                                    
+                                    // 添加点击效果
+                                    polygon.on('click', function() {
+                                        const infoWindow = new AMap.InfoWindow({
+                                            content: `<div style="padding:8px 12px; font-family:Comic Sans MS; font-size:14px; background:linear-gradient(45deg, #ffc2d1, #ffd6e0); border-radius:10px; border:2px solid #ff7aa2;">
+                                                <strong style="color:#ff4d88; font-size:16px;">✨ ${this.getExtData().cityName} ✨</strong><br>
+                                                <div style="margin-top:5px; color:#58494e; font-size:12px;">我曾到访过的美丽城市</div>
+                                            </div>`,
+                                            offset: new AMap.Pixel(0, -35),
+                                            closeButton: true,
+                                            borderRadius: 10,
+                                            shadow: '0 4px 8px rgba(255,77,136,0.2)'
+                                        });
+                                        infoWindow.open(map, center);
+                                    });
+                                    
                                     map.add(polygon);
 
-                                    // 城市标记（优化样式）
+                                    // 城市标记（拼图样式）
                                     const marker = new AMap.Marker({
                                         position: center,
                                         title: city,
                                         zIndex: 300, // 标记层级更高
                                         label: {
-                                            content: `<div style="color:#58494e; font-size:12px; background:#fff9fb; padding:3px 10px; border-radius:10px; border:2px solid #ff4d88; box-shadow:0 2px 8px rgba(255,77,136,0.4); font-weight:bold;">${city}</div>`,
+                                            content: `<div style="color:#58494e; font-size:12px; background:linear-gradient(45deg, #ffc2d1, #ffd6e0); padding:3px 10px; border-radius:15px; border:2px solid #ff4d88; box-shadow:0 2px 8px rgba(255,77,136,0.4); font-weight:bold; font-family:Comic Sans MS;">${city}</div>`,
                                             offset: new AMap.Pixel(-25, 0)
                                         },
                                         icon: new AMap.Icon({
                                             size: new AMap.Size(32, 32), // 放大标记图标
-                                            image: 'https://cdn.jsdelivr.net/npm/ionicons@4.5.10-0/dist/ionicons/svg/pin.svg',
+                                            image: 'https://cdn-icons-png.flaticon.com/512/832/832372.png', // 可爱标记图标
                                             imageSize: new AMap.Size(32, 32),
                                             imageOffset: new AMap.Pixel(0, 0)
                                         })
@@ -532,9 +624,9 @@
                                     // 点击标记弹窗
                                     marker.on('click', () => {
                                         const infoWindow = new AMap.InfoWindow({
-                                            content: `<div style="padding:8px 12px; font-family:Comic Sans MS; font-size:14px;">
-                                                <strong style="color:#ff4d88; font-size:16px;">${city}</strong><br>
-                                                我的旅游目的地 ✨
+                                            content: `<div style="padding:8px 12px; font-family:Comic Sans MS; font-size:14px; background:linear-gradient(45deg, #ffc2d1, #ffd6e0); border-radius:10px; border:2px solid #ff7aa2;">
+                                                <strong style="color:#ff4d88; font-size:16px;">✨ ${city} ✨</strong><br>
+                                                <div style="margin-top:5px; color:#58494e; font-size:12px;">我曾到访过的美丽城市</div>
                                             </div>`,
                                             offset: new AMap.Pixel(0, -35),
                                             closeButton: true,
