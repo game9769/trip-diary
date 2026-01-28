@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>我和蕾蕾的旅游日记</title>
+    <!-- Tailwind CSS（快速样式） -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 高德地图API（测试Key，仅临时体验，建议尽快替换自己的） -->
+    <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=a2aadef5af50f56bed9d40f072b49b90"></script>
+    <!-- SheetJS（解析Excel） -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- 可爱图标 -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <!-- 自定义样式（毛绒绒可爱风+增强美化） -->
+    <style type="text/tailwindcss">
+        @layer utilities {
+            /* 毛绒边框效果 */
+            .fluffy-border {
+                border: 2px solid #f8e1e6;
+                box-shadow: 0 4px 8px rgba(255, 182, 193, 0.3), inset 0 2px 4px rgba(255, 255, 255, 0.8);
+            }
+            /* 毛绒按钮效果 */
+            .fluffy-btn {
+                background: linear-gradient(145deg, #ffc2d1, #ffd6e0);
+                border-radius: 16px;
+                box-shadow: 0 4px 8px rgba(255, 182, 193, 0.4), inset 0 -2px 4px rgba(255, 105, 180, 0.1);
+                transition: all 0.3s ease;
+            }
+            .fluffy-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 12px rgba(255, 182, 193, 0.5);
+            }
+            .fluffy-btn:active {
+                transform: translateY(0);
+                box-shadow: 0 2px 4px rgba(255, 182, 193, 0.4);
+            }
+            /* 毛绒卡片效果 */
+            .fluffy-card {
+                background: #fff9fb;
+                border-radius: 20px;
+                box-shadow: 0 6px 12px rgba(255, 182, 193, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+                transition: all 0.3s ease;
+            }
+            .fluffy-card:hover {
+                box-shadow: 0 8px 16px rgba(255, 182, 193, 0.3);
+            }
+            /* 图片加载过渡 */
+            .img-fade {
+                transition: opacity 0.5s ease;
+            }
+            /* 页面过渡动画 */
+            .page-fade {
+                transition: opacity 0.5s ease, transform 0.5s ease;
+            }
+            .page-fade.hidden {
+                opacity: 0;
+                transform: translateY(20px);
+                pointer-events: none;
+            }
+            /* 滚动条美化 */
+            .custom-scrollbar::-webkit-scrollbar {
+                width: 6px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-track {
+                background: #fff0f3;
+                border-radius: 10px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-thumb {
+                background: #ff8fab;
+                border-radius: 10px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+                background: #ff6b9e;
+            }
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        // 温馨可爱配色（优化饱和度，更柔和）
+                        primary: '#ff7aa2',
+                        secondary: '#fff5f7',
+                        accent: '#ffe8ed',
+                        text: '#58494e',
+                    },
+                    fontFamily: {
+                        cute: ['Comic Sans MS', 'Microsoft YaHei', 'PingFang SC', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'cute': '0 4px 12px rgba(255, 140, 170, 0.15)',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-secondary min-h-screen font-cute text-text antialiased">
+    <!-- 登录页面（增加过渡动画） -->
+    <div id="loginPage" class="flex flex-col items-center justify-center min-h-screen px-4 page-fade">
+        <div class="fluffy-card p-8 w-full max-w-md transform hover:scale-[1.01]">
+            <h1 class="text-[clamp(1.8rem,4vw,2.5rem)] text-primary text-center mb-6 font-bold">
+                <i class="fa fa-paper-plane-o mr-2 animate-pulse"></i>旅游日记小窝
+            </h1>
+            <div class="mb-6">
+                <label class="block text-sm font-medium mb-2 text-text/80">专属账号</label>
+                <input type="text" id="accountInput" 
+                       class="w-full p-3 rounded-lg border border-primary/30 fluffy-border focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-transparent transition-all"
+                       placeholder="输入你的专属账号">
+            </div>
+            <button id="loginBtn" class="fluffy-btn w-full py-3 text-white font-medium">
+                <i class="fa fa-key mr-2"></i>进入小窝
+            </button>
+            <p class="text-xs text-text/60 text-center mt-4">测试账号：蝎子莱莱</p>
+        </div>
+    </div>
+
+    <!-- 主页面（默认隐藏，增加过渡动画） -->
+    <div id="mainPage" class="hidden px-4 py-6 page-fade">
+        <!-- 顶部导航（修复对齐问题，优化布局） -->
+        <header class="fluffy-card p-5 mb-6 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <i class="fa fa-user-circle-o text-primary text-2xl"></i>
+                </div>
+                <span class="text-lg font-medium" id="currentAccount">蝎子莱莱</span>
+            </div>
+            <button id="memoBtn" class="fluffy-btn py-2 px-6 text-white flex items-center gap-2">
+                <i class="fa fa-book"></i>备忘录
+            </button>
+        </header>
+
+        <!-- 备忘录弹窗（优化样式+可编辑） -->
+        <div id="memoModal" class="fixed inset-0 bg-black/50 flex items-center justify-center hidden z-50 px-4">
+            <div class="fluffy-card w-full max-w-md p-6 transform transition-all scale-100 hover:scale-[1.02]">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl text-primary font-bold flex items-center gap-2">
+                        <i class="fa fa-sticky-note-o"></i>我的备忘录
+                    </h3>
+                    <button id="closeMemoBtn" class="text-gray-500 hover:text-primary transition-colors">
+                        <i class="fa fa-times text-xl"></i>
+                    </button>
+                </div>
+                <textarea id="memoContent" class="min-h-[150px] w-full p-4 bg-white/80 rounded-lg fluffy-border custom-scrollbar resize-none" placeholder="记录你的旅游小想法～">2026年计划去云南旅游～
+三亚之旅记得带防晒霜！</textarea>
+                <button id="saveMemoBtn" class="fluffy-btn mt-4 py-2 px-6 text-white text-sm">
+                    <i class="fa fa-save mr-1"></i>保存
+                </button>
+            </div>
+        </div>
+
+        <!-- 主体内容：地图 + 旅游日记（优化间距） -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 地图区域（占2列，优化内边距） -->
+            <div class="lg:col-span-2 fluffy-card p-5">
+                <h2 class="text-xl text-primary font-bold mb-4 flex items-center gap-2">
+                    <i class="fa fa-globe"></i>我的旅行足迹
+                </h2>
+                <div id="mapContainer" class="w-full h-[500px] md:h-[600px] rounded-lg overflow-hidden border border-primary/10"></div>
+            </div>
+
+            <!-- 旅游日记列表（优化滚动条+间距） -->
+            <div class="fluffy-card p-5">
+                <h2 class="text-xl text-primary font-bold mb-4 flex items-center gap-2">
+                    <i class="fa fa-calendar"></i>旅游日记
+                </h2>
+                <div id="travelDiaryList" class="space-y-5 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                    <!-- 测试日记卡片（无Excel时显示） -->
+                    <div class="fluffy-card p-4 transition-all hover:shadow-cute hover:-translate-y-1">
+                        <h3 class="font-bold text-primary text-lg mb-3">三亚之旅</h3>
+                        <div class="mt-2 text-sm space-y-2">
+                            <div class="relative w-full h-32 rounded-lg overflow-hidden border border-primary/20">
+                                <img src="https://source.unsplash.com/random/800x600/?三亚 风景" 
+                                     alt="三亚风景" 
+                                     class="w-full h-full object-cover img-fade">
+                                <div class="absolute bottom-2 left-2 bg-white/80 text-xs px-2 py-1 rounded-md backdrop-blur-sm">
+                                    三亚
+                                </div>
+                            </div>
+                            <p class="flex items-center gap-1"><i class="fa fa-map-marker text-primary"></i> 城市：三亚</p>
+                            <p class="flex items-center gap-1"><i class="fa fa-calendar text-primary"></i> 时间：2025-10</p>
+                            <p class="flex items-center gap-1"><i class="fa fa-clock-o text-primary"></i> 天数：5天</p>
+                            <p class="flex items-center gap-1"><i class="fa fa-money text-primary"></i> 开销：计划5000元 / 实际4800元</p>
+                            <p class="flex items-center gap-1"><i class="fa fa-users text-primary"></i> 人数：2人</p>
+                            <a href="https://www.mafengwo.cn/i/25000000.html" target="_blank" class="fluffy-btn mt-3 inline-block py-2 px-4 text-white text-sm">
+                                <i class="fa fa-link mr-1"></i>查看攻略
+                            </a>
+                        </div>
+                    </div>
+                    <div class="fluffy-card p-4 transition-all hover:shadow-cute hover:-translate-y-1">
+                        <h3 class="font-bold text-primary text-lg mb-3">成都之旅</h3>
+                        <div class="mt-2 text-sm space-y-2">
+                            <div class="relative w-full h-32 rounded-lg overflow-hidden border border-primary/20">
+                                <img src="https://source.unsplash.com/random/800x600/?成都 风景" 
+                                     alt="成都风景" 
+                                     class="w-full h-full object-cover img-fade">
+                                <div class="absolute bottom-2 left-2 bg-white/80 text-xs px-2 py-1 rounded-md backdrop-blur-sm">
+                                    成都
+                                </div>
+                            </div>
+                            <p class="flex items-center gap-1"><i class="fa fa-map-marker text-primary"></i> 城市：成都</p>
+                            <p class="flex items-center gap-1"><i class="fa fa-calendar text-primary"></i> 时间：2025-08</p>
+                            <p class="flex items-center gap-1"><i class="fa fa-clock-o text-primary"></i> 天数：4天</p>
+                            <p class="flex items-center gap-1"><i class="fa fa-money text-primary"></i> 开销：计划4000元 / 实际3800元</p>
+                            <p class="flex items-center gap-1"><i class="fa fa-users text-primary"></i> 人数：2人</p>
+                            <a href="https://www.mafengwo.cn/i/24000000.html" target="_blank" class="fluffy-btn mt-3 inline-block py-2 px-4 text-white text-sm">
+                                <i class="fa fa-link mr-1"></i>查看攻略
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let currentUser = '';
+        let accountData = {
+            // 本地测试账号兜底（无Excel时也能登录）
+            '蝎子莱莱': {
+                备忘录: '2026年计划去云南旅游～\n三亚之旅记得带防晒霜！'
+            }
+        }; 
+        let travelDiaryData = [
+            // 本地测试日记数据（无Excel时显示）
+            {
+                日记名称: '三亚之旅',
+                关联城市: '三亚',
+                旅游时间: '2025-10',
+                天数: 5,
+                计划开销: 5000,
+                实际开销: 4800,
+                人数: 2,
+                攻略链接: 'https://www.mafengwo.cn/i/25000000.html'
+            },
+            {
+                日记名称: '成都之旅',
+                关联城市: '成都',
+                旅游时间: '2025-08',
+                天数: 4,
+                计划开销: 4000,
+                实际开销: 3800,
+                人数: 2,
+                攻略链接: 'https://www.mafengwo.cn/i/24000000.html'
+            }
+        ]; 
+        let map = null; 
+        const EXCEL_FILE_URL = '我和蕾蕾的旅游日记.xlsx'; 
+        const DEFAULT_IMAGE = 'https://source.unsplash.com/random/800x600/?中国风景,自然';
+
+        // ========== 根据城市获取风景图片 ==========
+        function getCitySceneryImage(city) {
+            if (!city || city === '未知') {
+                return DEFAULT_IMAGE;
+            }
+            const encodedCity = encodeURIComponent(`${city} 风景`);
+            return `https://source.unsplash.com/random/800x600/?${encodedCity},自然,旅游`;
+        }
+
+        // ========== 修复登录逻辑（优先本地测试数据） ==========
+        document.getElementById('loginBtn').addEventListener('click', async () => {
+            const account = document.getElementById('accountInput').value.trim();
+            if (!account) {
+                alert('请输入专属账号～');
+                return;
+            }
+
+            // 第一步：先验证账号是否存在（本地兜底+Excel）
+            if (!accountData[account]) {
+                alert('账号不存在哦～请输入"蝎子莱莱"测试');
+                return;
+            }
+
+            // 第二步：显示加载状态
+            const loginBtn = document.getElementById('loginBtn');
+            const originalBtnText = loginBtn.innerHTML;
+            loginBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i>正在进入...';
+            loginBtn.disabled = true;
+
+            try {
+                // 第三步：尝试读取Excel（失败也不影响登录）
+                await loadExcelData().catch(err => {
+                    console.log('Excel加载失败（本地测试模式）：', err);
+                    alert('Excel文件未找到，进入本地测试模式～');
+                });
+
+                // 第四步：登录成功，显示主页面
+                currentUser = account;
+                document.getElementById('currentAccount').textContent = account;
+                document.getElementById('loginPage').classList.add('hidden');
+                document.getElementById('mainPage').classList.remove('hidden');
+                
+                // 初始化地图
+                await initMap().catch(err => {
+                    console.error('地图加载失败：', err);
+                    alert('地图加载失败（请检查API Key），仍可查看日记～');
+                });
+
+                // 如果有Excel数据，重新渲染日记
+                if (travelDiaryData.length > 2) {
+                    renderTravelDiary();
+                }
+
+                // 更新备忘录（优先Excel数据）
+                renderMemo();
+
+            } catch (err) {
+                console.error('登录异常：', err);
+                alert(`登录异常：${err.message}`);
+            } finally {
+                // 恢复按钮状态
+                loginBtn.innerHTML = originalBtnText;
+                loginBtn.disabled = false;
+            }
+        });
+
+        // 回车登录
+        document.getElementById('accountInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('loginBtn').click();
+            }
+        });
+
+        // ========== Excel读取逻辑（失败不影响登录） ==========
+        async function loadExcelData() {
+            const response = await fetch(EXCEL_FILE_URL);
+            if (!response.ok) {
+                throw new Error(`Excel文件不存在：${EXCEL_FILE_URL}`);
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+
+            // 解析账号信息
+            if (workbook.Sheets['账号信息']) {
+                const accountSheet = workbook.Sheets['账号信息'];
+                const accountJson = XLSX.utils.sheet_to_json(accountSheet);
+                accountData = {};
+                accountJson.forEach(item => {
+                    if (item.专属账号) {
+                        accountData[item.专属账号] = {
+                            备忘录: item.备忘录 || '暂无备忘录～'
+                        };
+                    }
+                });
+            }
+
+            // 解析旅游日记
+            if (workbook.Sheets['旅游日记']) {
+                const diarySheet = workbook.Sheets['旅游日记'];
+                travelDiaryData = XLSX.utils.sheet_to_json(diarySheet);
+            }
+
+            console.log('Excel数据加载成功：', { accountData, travelDiaryData });
+        }
+
+        // ========== 地图初始化（简化+容错） ==========
+        async function initMap() {
+            if (typeof AMap === 'undefined') {
+                throw new Error('高德地图API未加载，请替换有效的API Key');
+            }
+
+            // 初始化地图
+            map = new AMap.Map('mapContainer', {
+                zoom: 4,
+                center: [105.000000, 36.000000],
+                mapStyle: 'amap://styles/pink', // 粉色风格，匹配可爱主题
+                resizeEnable: true,
+                showLabel: true,
+                zoomEnable: true,
+                dragEnable: true
+            });
+
+            // 等待地图加载完成
+            await new Promise((resolve) => {
+                map.on('complete', resolve);
+            });
+
+            // 高亮关联城市
+            const cityList = travelDiaryData.map(item => item.关联城市).filter(Boolean);
+            if (cityList.length > 0) {
+                AMap.plugin('AMap.DistrictSearch', () => {
+                    const districtSearch = new AMap.DistrictSearch({
+                        level: 'city',
+                        extensions: 'all'
+                    });
+
+                    cityList.forEach(city => {
+                        if (!city) return;
+                        districtSearch.search(city, (status, result) => {
+                            if (status === 'complete' && result.districtList.length > 0) {
+                                const bounds = result.districtList[0].boundaries;
+                                if (bounds) {
+                                    // 城市高亮多边形（优化颜色，更柔和）
+                                    const polygon = new AMap.Polygon({
+                                        path: bounds,
+                                        strokeColor: '#ff7aa2',
+                                        strokeWeight: 3,
+                                        strokeOpacity: 0.8,
+                                        fillColor: '#ffcce0',
+                                        fillOpacity: 0.5,
+                                        zIndex: 50
+                                    });
+                                    map.add(polygon);
+
+                                    // 城市标记（优化样式）
+                                    const center = result.districtList[0].center;
+                                    const marker = new AMap.Marker({
+                                        position: center,
+                                        title: city,
+                                        zIndex: 100,
+                                        label: {
+                                            content: `<div style="color:#58494e; font-size:12px; background:#fff9fb; padding:3px 10px; border-radius:10px; border:1px solid #ff7aa2; box-shadow:0 2px 4px rgba(255,122,162,0.2);">${city}</div>`,
+                                            offset: new AMap.Pixel(-25, 0)
+                                        },
+                                        icon: new AMap.Icon({
+                                            size: new AMap.Size(28, 28),
+                                            image: 'https://cdn.jsdelivr.net/npm/ionicons@4.5.10-0/dist/ionicons/svg/pin.svg',
+                                            imageSize: new AMap.Size(28, 28),
+                                            imageOffset: new AMap.Pixel(0, 0)
+                                        })
+                                    });
+                                    map.add(marker);
+
+                                    // 点击标记弹窗
+                                    marker.on('click', () => {
+                                        const infoWindow = new AMap.InfoWindow({
+                                            content: `<div style="padding:8px 12px; font-family:Comic Sans MS;">
+                                                <strong style="color:#ff7aa2;">${city}</strong><br>
+                                                旅游目的地
+                                            </div>`,
+                                            offset: new AMap.Pixel(0, -30)
+                                        });
+                                        infoWindow.open(map, center);
+                                    });
+                                }
+                            }
+                        });
+                    });
+                });
+            }
+
+            // 添加地图控件（缩放、定位）
+            AMap.plugin(['AMap.Scale', 'AMap.ToolBar'], () => {
+                map.addControl(new AMap.Scale());
+                map.addControl(new AMap.ToolBar({
+                    position: 'RB' // 右下角
+                }));
+            });
+        }
+
+        // ========== 旅游日记渲染 ==========
+        function renderTravelDiary() {
+            const listContainer = document.getElementById('travelDiaryList');
+            listContainer.innerHTML = '';
+
+            if (travelDiaryData.length === 0) {
+                listContainer.innerHTML = '<div class="text-center text-gray-500 py-8">暂无旅游日记～</div>';
+                return;
+            }
+
+            travelDiaryData.forEach((item) => {
+                const card = document.createElement('div');
+                card.className = 'fluffy-card p-4 transition-all hover:shadow-cute hover:-translate-y-1';
+                const travelImage = item.旅游图片 && item.旅游图片.trim() 
+                    ? item.旅游图片.trim() 
+                    : getCitySceneryImage(item.关联城市);
+                
+                card.innerHTML = `
+                    <h3 class="font-bold text-primary text-lg mb-3">${item.日记名称 || '未命名日记'}</h3>
+                    <div class="mt-2 text-sm space-y-2">
+                        <div class="relative w-full h-32 rounded-lg overflow-hidden border border-primary/20">
+                            <img src="${travelImage}" 
+                                 alt="${item.日记名称 || item.关联城市}" 
+                                 class="w-full h-full object-cover img-fade"
+                                 onerror="this.src='${DEFAULT_IMAGE}'">
+                            <div class="absolute bottom-2 left-2 bg-white/80 text-xs px-2 py-1 rounded-md backdrop-blur-sm">
+                                ${item.关联城市 || '未知城市'}
+                            </div>
+                        </div>
+                        <p class="flex items-center gap-1"><i class="fa fa-map-marker text-primary"></i> 城市：${item.关联城市 || '未知'}</p>
+                        <p class="flex items-center gap-1"><i class="fa fa-calendar text-primary"></i> 时间：${item.旅游时间 || '未知'}</p>
+                        <p class="flex items-center gap-1"><i class="fa fa-clock-o text-primary"></i> 天数：${item.天数 || '未知'}天</p>
+                        <p class="flex items-center gap-1"><i class="fa fa-money text-primary"></i> 开销：计划${item.计划开销 || 0}元 / 实际${item.实际开销 || 0}元</p>
+                        <p class="flex items-center gap-1"><i class="fa fa-users text-primary"></i> 人数：${item.人数 || '未知'}</p>
+                    </div>
+                    ${item.攻略链接 && item.攻略链接.trim() ? `
+                        <a href="${item.攻略链接.trim()}" target="_blank" class="fluffy-btn mt-3 inline-block py-2 px-4 text-white text-sm">
+                            <i class="fa fa-link mr-1"></i>查看攻略
+                        </a>
+                    ` : ''}
+                `;
+                listContainer.appendChild(card);
+            });
+        }
+
+        // ========== 备忘录功能（增加保存） ==========
+        function renderMemo() {
+            const memoContent = document.getElementById('memoContent');
+            memoContent.value = accountData[currentUser]?.备忘录 || '暂无备忘录～';
+        }
+
+        // 打开备忘录
+        document.getElementById('memoBtn').addEventListener('click', () => {
+            document.getElementById('memoModal').classList.remove('hidden');
+            // 聚焦输入框
+            setTimeout(() => {
+                document.getElementById('memoContent').focus();
+            }, 200);
+        });
+
+        // 关闭备忘录
+        document.getElementById('closeMemoBtn').addEventListener('click', () => {
+            document.getElementById('memoModal').classList.add('hidden');
+        });
+
+        // 点击空白处关闭备忘录
+        document.getElementById('memoModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('memoModal')) {
+                document.getElementById('memoModal').classList.add('hidden');
+            }
+        });
+
+        // 保存备忘录
+        document.getElementById('saveMemoBtn').addEventListener('click', () => {
+            const memoContent = document.getElementById('memoContent').value.trim();
+            accountData[currentUser].备忘录 = memoContent || '暂无备忘录～';
+            alert('备忘录保存成功啦～');
+            document.getElementById('memoModal').classList.add('hidden');
+        });
+
+        // ========== 适配与优化 ==========
+        window.addEventListener('resize', () => {
+            if (map) {
+                setTimeout(() => map.resize(), 100);
+            }
+        });
+
+        // 自动填充测试账号
+        window.onload = () => {
+            document.getElementById('accountInput').value = '蝎子莱莱';
+            // 初始化页面透明度
+            document.getElementById('loginPage').classList.remove('opacity-0');
+        };
+
+        // 资源清理
+        window.addEventListener('beforeunload', () => {
+            if (map) {
+                map.destroy();
+            }
+        });
+
+        // 阻止文本框回车提交
+        document.getElementById('memoContent').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.ctrlKey) {
+                e.preventDefault();
+                // 允许换行
+                const textarea = e.target;
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                textarea.value = textarea.value.substring(0, start) + '\n' + textarea.value.substring(end);
+                textarea.selectionStart = textarea.selectionEnd = start + 1;
+            }
+        });
+    </script>
+</body>
+</html>
