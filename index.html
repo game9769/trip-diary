@@ -6,8 +6,8 @@
     <title>我和蕾蕾的旅游日记</title>
     <!-- Tailwind CSS（快速样式） -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 高德地图API（使用你替换后的Key） -->
-    <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=a2aadef5af50f56bed9d40f072b49b90"></script>
+    <!-- 高德地图API（异步加载，避免阻塞页面） -->
+    <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=a2aadef5af50f56bed9d40f072b49b90" async></script>
     <!-- SheetJS（解析Excel） -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- 可爱图标 -->
@@ -99,7 +99,7 @@
     </script>
 </head>
 <body class="bg-secondary min-h-screen font-cute text-text antialiased">
-    <!-- 登录页面（增加过渡动画） -->
+    <!-- 登录页面（优先渲染，优化加载速度） -->
     <div id="loginPage" class="flex flex-col items-center justify-center min-h-screen px-4 page-fade">
         <div class="fluffy-card p-8 w-full max-w-md transform hover:scale-[1.01]">
             <h1 class="text-[clamp(1.8rem,4vw,2.5rem)] text-primary text-center mb-6 font-bold">
@@ -246,7 +246,8 @@
             }
         ]; 
         let map = null; 
-        const EXCEL_FILE_URL = '我和蕾蕾的旅游日记.xlsx'; 
+        // ========== 核心修改1：修正Excel文件路径为用户指定的相对路径 ==========
+        const EXCEL_FILE_URL = "./我和蕾蕾的旅游日记.xlsx"; 
         const DEFAULT_IMAGE = 'https://picsum.photos/800/600?random=1';
 
         // ========== 日期格式化函数（修复日期展示格式） ==========
@@ -274,7 +275,7 @@
             return `https://picsum.photos/seed/${encodedCity}/800/600`;
         }
 
-        // ========== 登录逻辑（优先读取Excel数据） ==========
+        // ========== 登录逻辑（优先读取Excel数据，优化加载不阻塞登录） ==========
         document.getElementById('loginBtn').addEventListener('click', async () => {
             const account = document.getElementById('accountInput').value.trim();
             if (!account) {
@@ -295,23 +296,25 @@
             loginBtn.disabled = true;
 
             try {
-                // 第三步：尝试读取Excel（失败也不影响登录）
+                // 第三步：尝试读取Excel（失败也不影响登录，增加详细错误日志）
                 await loadExcelData().catch(err => {
-                    console.log('Excel加载失败（本地测试模式）：', err);
-                    alert('Excel文件未找到，进入本地测试模式～');
+                    console.error('Excel加载失败详情：', err);
+                    alert(`Excel加载失败（本地测试模式）：${err.message}\n请检查文件路径是否正确，文件是否存在`);
                 });
 
-                // 第四步：登录成功，显示主页面
+                // 第四步：登录成功，显示主页面（优先渲染，不等待地图）
                 currentUser = account;
                 document.getElementById('currentAccount').textContent = account;
                 document.getElementById('loginPage').classList.add('hidden');
                 document.getElementById('mainPage').classList.remove('hidden');
                 
-                // 初始化地图（优化Key容错）
-                await initMap().catch(err => {
-                    console.error('地图加载失败：', err);
-                    alert('地图加载失败（请检查API Key），仍可查看日记～');
-                });
+                // 初始化地图（异步执行，不阻塞页面显示）
+                setTimeout(async () => {
+                    await initMap().catch(err => {
+                        console.error('地图加载失败：', err);
+                        alert('地图加载失败（请检查API Key），仍可查看日记～');
+                    });
+                }, 500);
 
                 // 强制渲染旅游日记（无论Excel数据多少）
                 renderTravelDiary();
@@ -336,46 +339,84 @@
             }
         });
 
-        // ========== Excel读取逻辑（修复旅游日记读取后不渲染问题） ==========
+        // ========== Excel读取逻辑（修复路径+增加详细错误处理） ==========
         async function loadExcelData() {
-            const response = await fetch(EXCEL_FILE_URL);
-            if (!response.ok) {
-                throw new Error(`Excel文件不存在：${EXCEL_FILE_URL}`);
-            }
-            const arrayBuffer = await response.arrayBuffer();
-            const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+            console.log('开始加载Excel文件：', EXCEL_FILE_URL);
+            // 增加请求超时处理（避免无限等待）
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
 
-            // 解析账号信息（sheet1）
-            if (workbook.Sheets['账号信息']) {
-                const accountSheet = workbook.Sheets['账号信息'];
-                const accountJson = XLSX.utils.sheet_to_json(accountSheet);
-                accountData = {};
-                accountJson.forEach(item => {
-                    if (item.专属账号) {
-                        accountData[item.专属账号] = {
-                            备忘录: item.备忘录 || '暂无备忘录～'
-                        };
-                    }
+            try {
+                const response = await fetch(EXCEL_FILE_URL, {
+                    signal: controller.signal,
+                    method: 'GET',
+                    cache: 'no-cache' // 禁用缓存，确保读取最新文件
                 });
-                console.log('账号信息读取成功：', accountData);
-            }
-
-            // 解析旅游日记（sheet2）- 强制替换测试数据
-            if (workbook.Sheets['旅游日记']) {
-                const diarySheet = workbook.Sheets['旅游日记'];
-                const excelDiaryData = XLSX.utils.sheet_to_json(diarySheet);
-                // 仅当Excel中有数据时替换
-                if (excelDiaryData.length > 0) {
-                    travelDiaryData = excelDiaryData;
+                
+                clearTimeout(timeoutId); // 清除超时
+                
+                if (!response.ok) {
+                    throw new Error(`文件请求失败 [${response.status}] ${response.statusText}\n路径：${EXCEL_FILE_URL}`);
                 }
-                console.log('旅游日记读取成功：', travelDiaryData);
+                
+                const arrayBuffer = await response.arrayBuffer();
+                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+
+                // 解析账号信息（sheet1）
+                if (workbook.Sheets['账号信息']) {
+                    const accountSheet = workbook.Sheets['账号信息'];
+                    const accountJson = XLSX.utils.sheet_to_json(accountSheet);
+                    accountData = {};
+                    accountJson.forEach(item => {
+                        if (item.专属账号) {
+                            accountData[item.专属账号] = {
+                                备忘录: item.备忘录 || '暂无备忘录～'
+                            };
+                        }
+                    });
+                    console.log('账号信息读取成功：', accountData);
+                }
+
+                // 解析旅游日记（sheet2）- 强制替换测试数据
+                if (workbook.Sheets['旅游日记']) {
+                    const diarySheet = workbook.Sheets['旅游日记'];
+                    const excelDiaryData = XLSX.utils.sheet_to_json(diarySheet);
+                    // 仅当Excel中有数据时替换
+                    if (excelDiaryData.length > 0) {
+                        travelDiaryData = excelDiaryData;
+                    }
+                    console.log('旅游日记读取成功：', travelDiaryData);
+                }
+            } catch (err) {
+                clearTimeout(timeoutId); // 清除超时
+                // 分类错误提示，方便排查
+                if (err.name === 'AbortError') {
+                    throw new Error('Excel文件请求超时（超过10秒），请检查网络或文件大小');
+                } else if (err.message.includes('Failed to fetch')) {
+                    throw new Error('无法访问Excel文件（跨域/文件不存在/路径错误）');
+                } else {
+                    throw new Error(err.message);
+                }
             }
         }
 
-        // ========== 地图初始化（优化城市高亮显示，更醒目） ==========
+        // ========== 地图初始化（异步加载，不阻塞页面） ==========
         async function initMap() {
+            // 等待高德地图API加载完成（解决异步加载导致的未定义问题）
             if (typeof AMap === 'undefined') {
-                throw new Error('高德地图API未加载，请检查API Key是否有效');
+                await new Promise((resolve, reject) => {
+                    const checkAMap = setInterval(() => {
+                        if (typeof AMap !== 'undefined') {
+                            clearInterval(checkAMap);
+                            resolve();
+                        }
+                    }, 100);
+                    // 超时处理
+                    setTimeout(() => {
+                        clearInterval(checkAMap);
+                        reject(new Error('高德地图API加载超时'));
+                    }, 15000);
+                });
             }
 
             // 初始化地图（优化配置保证显示）
@@ -477,25 +518,6 @@
                     });
                 });
             }
-
-            // 添加地图控件（缩放、定位）
-            AMap.plugin(['AMap.Scale', 'AMap.ToolBar', 'AMap.MapType'], () => {
-                map.addControl(new AMap.Scale());
-                map.addControl(new AMap.ToolBar({
-                    position: 'RB' // 右下角
-                }));
-                map.addControl(new AMap.MapType({
-                    defaultType: 0,
-                    showTraffic: false
-                }));
-            });
-
-            // 自适应地图视野到所有标记城市
-            if (allCities.length > 0) {
-                setTimeout(() => {
-                    map.setFitView();
-                }, 1000);
-            }
         }
 
         // ========== 旅游日记渲染（修复日期格式+图片显示问题） ==========
@@ -565,19 +587,19 @@
             }
         });
 
-        // ========== 适配与优化 ==========
+        // ========== 适配与优化（核心修改2：优化页面加载速度） ==========
+        // 优先渲染登录页面，不等待任何资源
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('loginPage').classList.remove('hidden');
+            document.getElementById('accountInput').value = '';
+            console.log('登录页面已优先渲染完成');
+        });
+
         window.addEventListener('resize', () => {
             if (map) {
                 setTimeout(() => map.resize(), 100);
             }
         });
-
-        // 自动填充测试账号
-        window.onload = () => {
-            document.getElementById('accountInput').value = '';
-            // 初始化页面透明度
-            document.getElementById('loginPage').classList.remove('opacity-0');
-        };
 
         // 资源清理
         window.addEventListener('beforeunload', () => {
