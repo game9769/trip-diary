@@ -114,7 +114,6 @@
             <button id="loginBtn" class="fluffy-btn w-full py-3 text-white font-medium">
                 <i class="fa fa-key mr-2"></i>进入小窝
             </button>
-            <p class="text-xs text-text/60 text-center mt-4">测试账号：蝎子莱莱</p>
         </div>
     </div>
 
@@ -123,8 +122,9 @@
         <!-- 顶部导航（修复对齐问题，优化布局） -->
         <header class="fluffy-card p-5 mb-6 flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <i class="fa fa-user-circle-o text-primary text-2xl"></i>
+                <!-- 替换为固定可爱头像 -->
+                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-primary/20">
+                    <img src="https://picsum.photos/seed/cuteavatar/200/200" alt="可爱头像" class="w-full h-full object-cover">
                 </div>
                 <span class="text-lg font-medium" id="currentAccount">蝎子莱莱</span>
             </div>
@@ -178,7 +178,7 @@
                                 </div>
                             </div>
                             <p class="flex items-center gap-1"><i class="fa fa-map-marker text-primary"></i> 城市：三亚</p>
-                            <p class="flex items-center gap-1"><i class="fa fa-calendar text-primary"></i> 时间：2025-10</p>
+                            <p class="flex items-center gap-1"><i class="fa fa-calendar text-primary"></i> 时间：2025年10月</p>
                             <p class="flex items-center gap-1"><i class="fa fa-clock-o text-primary"></i> 天数：5天</p>
                             <p class="flex items-center gap-1"><i class="fa fa-money text-primary"></i> 开销：计划5000元 / 实际4800元</p>
                             <p class="flex items-center gap-1"><i class="fa fa-users text-primary"></i> 人数：2人</p>
@@ -199,7 +199,7 @@
                                 </div>
                             </div>
                             <p class="flex items-center gap-1"><i class="fa fa-map-marker text-primary"></i> 城市：成都</p>
-                            <p class="flex items-center gap-1"><i class="fa fa-calendar text-primary"></i> 时间：2025-08</p>
+                            <p class="flex items-center gap-1"><i class="fa fa-calendar text-primary"></i> 时间：2025年08月</p>
                             <p class="flex items-center gap-1"><i class="fa fa-clock-o text-primary"></i> 天数：4天</p>
                             <p class="flex items-center gap-1"><i class="fa fa-money text-primary"></i> 开销：计划4000元 / 实际3800元</p>
                             <p class="flex items-center gap-1"><i class="fa fa-users text-primary"></i> 人数：2人</p>
@@ -248,6 +248,19 @@
         let map = null; 
         const EXCEL_FILE_URL = '我和蕾蕾的旅游日记.xlsx'; 
         const DEFAULT_IMAGE = 'https://picsum.photos/800/600?random=1';
+
+        // ========== 日期格式化函数（修复日期展示格式） ==========
+        function formatTravelDate(dateStr) {
+            if (!dateStr) return '未知';
+            // 处理格式：2025-10 → 2025年10月；2025-10-01 → 2025年10月01日
+            const dateParts = dateStr.split('-').filter(part => part);
+            if (dateParts.length === 2) {
+                return `${dateParts[0]}年${dateParts[1].padStart(2, '0')}月`;
+            } else if (dateParts.length === 3) {
+                return `${dateParts[0]}年${dateParts[1].padStart(2, '0')}月${dateParts[2].padStart(2, '0')}日`;
+            }
+            return dateStr;
+        }
 
         // ========== 根据城市获取风景图片（改用picsum保证国内可访问） ==========
         function getCitySceneryImage(city) {
@@ -359,7 +372,7 @@
             }
         }
 
-        // ========== 地图初始化（优化Key检查+支持多城市高亮） ==========
+        // ========== 地图初始化（优化城市高亮显示，更醒目） ==========
         async function initMap() {
             if (typeof AMap === 'undefined') {
                 throw new Error('高德地图API未加载，请检查API Key是否有效');
@@ -395,7 +408,7 @@
             // 去重
             allCities = [...new Set(allCities)];
 
-            // 高亮所有关联城市
+            // 高亮所有关联城市（增强高亮效果）
             if (allCities.length > 0) {
                 AMap.plugin('AMap.DistrictSearch', () => {
                     const districtSearch = new AMap.DistrictSearch({
@@ -413,15 +426,16 @@
                                 const center = district.center;
                                 
                                 if (bounds) {
-                                    // 城市高亮多边形（优化颜色，更柔和）
+                                    // 增强城市高亮多边形样式（更醒目）
                                     const polygon = new AMap.Polygon({
                                         path: bounds,
-                                        strokeColor: '#ff7aa2',
-                                        strokeWeight: 3,
-                                        strokeOpacity: 0.8,
-                                        fillColor: '#ffcce0',
-                                        fillOpacity: 0.5,
-                                        zIndex: 50
+                                        strokeColor: '#ff4d88', // 更亮的主色
+                                        strokeWeight: 6, // 加粗描边
+                                        strokeOpacity: 1, // 描边完全不透明
+                                        fillColor: '#ffb3c7', // 更醒目的填充色
+                                        fillOpacity: 0.7, // 填充透明度提高
+                                        zIndex: 200, // 提高层级确保不被遮挡
+                                        strokeStyle: 'solid' // 实线描边
                                     });
                                     map.add(polygon);
 
@@ -429,15 +443,15 @@
                                     const marker = new AMap.Marker({
                                         position: center,
                                         title: city,
-                                        zIndex: 100,
+                                        zIndex: 300, // 标记层级更高
                                         label: {
-                                            content: `<div style="color:#58494e; font-size:12px; background:#fff9fb; padding:3px 10px; border-radius:10px; border:1px solid #ff7aa2; box-shadow:0 2px 4px rgba(255,122,162,0.2);">${city}</div>`,
+                                            content: `<div style="color:#58494e; font-size:12px; background:#fff9fb; padding:3px 10px; border-radius:10px; border:2px solid #ff4d88; box-shadow:0 2px 8px rgba(255,77,136,0.4); font-weight:bold;">${city}</div>`,
                                             offset: new AMap.Pixel(-25, 0)
                                         },
                                         icon: new AMap.Icon({
-                                            size: new AMap.Size(28, 28),
+                                            size: new AMap.Size(32, 32), // 放大标记图标
                                             image: 'https://cdn.jsdelivr.net/npm/ionicons@4.5.10-0/dist/ionicons/svg/pin.svg',
-                                            imageSize: new AMap.Size(28, 28),
+                                            imageSize: new AMap.Size(32, 32),
                                             imageOffset: new AMap.Pixel(0, 0)
                                         })
                                     });
@@ -446,11 +460,14 @@
                                     // 点击标记弹窗
                                     marker.on('click', () => {
                                         const infoWindow = new AMap.InfoWindow({
-                                            content: `<div style="padding:8px 12px; font-family:Comic Sans MS;">
-                                                <strong style="color:#ff7aa2;">${city}</strong><br>
-                                                旅游目的地
+                                            content: `<div style="padding:8px 12px; font-family:Comic Sans MS; font-size:14px;">
+                                                <strong style="color:#ff4d88; font-size:16px;">${city}</strong><br>
+                                                我的旅游目的地 ✨
                                             </div>`,
-                                            offset: new AMap.Pixel(0, -30)
+                                            offset: new AMap.Pixel(0, -35),
+                                            closeButton: true,
+                                            borderRadius: 10,
+                                            shadow: '0 4px 8px rgba(255,77,136,0.2)'
                                         });
                                         infoWindow.open(map, center);
                                     });
@@ -481,7 +498,7 @@
             }
         }
 
-        // ========== 旅游日记渲染（修复Excel数据不显示+图片显示问题） ==========
+        // ========== 旅游日记渲染（修复日期格式+图片显示问题） ==========
         function renderTravelDiary() {
             const listContainer = document.getElementById('travelDiaryList');
             listContainer.innerHTML = '';
@@ -510,7 +527,7 @@
                             </div>
                         </div>
                         <p class="flex items-center gap-1"><i class="fa fa-map-marker text-primary"></i> 城市：${item.关联城市 || '未知'}</p>
-                        <p class="flex items-center gap-1"><i class="fa fa-calendar text-primary"></i> 时间：${item.旅游时间 || '未知'}</p>
+                        <p class="flex items-center gap-1"><i class="fa fa-calendar text-primary"></i> 时间：${formatTravelDate(item.旅游时间)}</p>
                         <p class="flex items-center gap-1"><i class="fa fa-clock-o text-primary"></i> 天数：${item.天数 || '未知'}天</p>
                         <p class="flex items-center gap-1"><i class="fa fa-money text-primary"></i> 开销：计划${item.计划开销 || 0}元 / 实际${item.实际开销 || 0}元</p>
                         <p class="flex items-center gap-1"><i class="fa fa-users text-primary"></i> 人数：${item.人数 || '未知'}</p>
@@ -557,7 +574,7 @@
 
         // 自动填充测试账号
         window.onload = () => {
-            document.getElementById('accountInput').value = '蝎子莱莱';
+            document.getElementById('accountInput').value = '';
             // 初始化页面透明度
             document.getElementById('loginPage').classList.remove('opacity-0');
         };
