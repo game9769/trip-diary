@@ -6,7 +6,7 @@
     <title>我和蕾蕾的旅游日记</title>
     <!-- Tailwind CSS（快速样式） -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 高德地图API（测试Key，仅临时体验，建议尽快替换自己的） -->
+    <!-- 高德地图API（使用你替换后的Key） -->
     <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=a2aadef5af50f56bed9d40f072b49b90"></script>
     <!-- SheetJS（解析Excel） -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -133,7 +133,7 @@
             </button>
         </header>
 
-        <!-- 备忘录弹窗（优化样式+可编辑） -->
+        <!-- 备忘录弹窗（改为只读模式，移除保存功能） -->
         <div id="memoModal" class="fixed inset-0 bg-black/50 flex items-center justify-center hidden z-50 px-4">
             <div class="fluffy-card w-full max-w-md p-6 transform transition-all scale-100 hover:scale-[1.02]">
                 <div class="flex justify-between items-center mb-4">
@@ -144,11 +144,8 @@
                         <i class="fa fa-times text-xl"></i>
                     </button>
                 </div>
-                <textarea id="memoContent" class="min-h-[150px] w-full p-4 bg-white/80 rounded-lg fluffy-border custom-scrollbar resize-none" placeholder="记录你的旅游小想法～">2026年计划去云南旅游～
+                <textarea id="memoContent" class="min-h-[150px] w-full p-4 bg-white/80 rounded-lg fluffy-border custom-scrollbar resize-none" placeholder="记录你的旅游小想法～" readonly>2026年计划去云南旅游～
 三亚之旅记得带防晒霜！</textarea>
-                <button id="saveMemoBtn" class="fluffy-btn mt-4 py-2 px-6 text-white text-sm">
-                    <i class="fa fa-save mr-1"></i>保存
-                </button>
             </div>
         </div>
 
@@ -168,12 +165,12 @@
                     <i class="fa fa-calendar"></i>旅游日记
                 </h2>
                 <div id="travelDiaryList" class="space-y-5 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                    <!-- 测试日记卡片（无Excel时显示） -->
+                    <!-- 测试日记卡片（仅Excel加载失败时显示） -->
                     <div class="fluffy-card p-4 transition-all hover:shadow-cute hover:-translate-y-1">
                         <h3 class="font-bold text-primary text-lg mb-3">三亚之旅</h3>
                         <div class="mt-2 text-sm space-y-2">
                             <div class="relative w-full h-32 rounded-lg overflow-hidden border border-primary/20">
-                                <img src="https://source.unsplash.com/random/800x600/?三亚 风景" 
+                                <img src="https://picsum.photos/seed/三亚/800/600" 
                                      alt="三亚风景" 
                                      class="w-full h-full object-cover img-fade">
                                 <div class="absolute bottom-2 left-2 bg-white/80 text-xs px-2 py-1 rounded-md backdrop-blur-sm">
@@ -194,7 +191,7 @@
                         <h3 class="font-bold text-primary text-lg mb-3">成都之旅</h3>
                         <div class="mt-2 text-sm space-y-2">
                             <div class="relative w-full h-32 rounded-lg overflow-hidden border border-primary/20">
-                                <img src="https://source.unsplash.com/random/800x600/?成都 风景" 
+                                <img src="https://picsum.photos/seed/成都/800/600" 
                                      alt="成都风景" 
                                      class="w-full h-full object-cover img-fade">
                                 <div class="absolute bottom-2 left-2 bg-white/80 text-xs px-2 py-1 rounded-md backdrop-blur-sm">
@@ -226,7 +223,7 @@
             }
         }; 
         let travelDiaryData = [
-            // 本地测试日记数据（无Excel时显示）
+            // 本地测试日记数据（仅Excel加载失败时显示）
             {
                 日记名称: '三亚之旅',
                 关联城市: '三亚',
@@ -250,18 +247,21 @@
         ]; 
         let map = null; 
         const EXCEL_FILE_URL = '我和蕾蕾的旅游日记.xlsx'; 
-        const DEFAULT_IMAGE = 'https://source.unsplash.com/random/800x600/?中国风景,自然';
+        const DEFAULT_IMAGE = 'https://picsum.photos/800/600?random=1';
 
-        // ========== 根据城市获取风景图片 ==========
+        // ========== 根据城市获取风景图片（改用picsum保证国内可访问） ==========
         function getCitySceneryImage(city) {
             if (!city || city === '未知') {
                 return DEFAULT_IMAGE;
             }
-            const encodedCity = encodeURIComponent(`${city} 风景`);
-            return `https://source.unsplash.com/random/800x600/?${encodedCity},自然,旅游`;
+            // 取第一个城市生成图片（顿号分隔时）
+            const mainCity = city.split('、')[0].trim();
+            const encodedCity = encodeURIComponent(mainCity);
+            // 使用picsum的seed参数保证每个城市图片固定
+            return `https://picsum.photos/seed/${encodedCity}/800/600`;
         }
 
-        // ========== 修复登录逻辑（优先本地测试数据） ==========
+        // ========== 登录逻辑（优先读取Excel数据） ==========
         document.getElementById('loginBtn').addEventListener('click', async () => {
             const account = document.getElementById('accountInput').value.trim();
             if (!account) {
@@ -294,16 +294,14 @@
                 document.getElementById('loginPage').classList.add('hidden');
                 document.getElementById('mainPage').classList.remove('hidden');
                 
-                // 初始化地图
+                // 初始化地图（优化Key容错）
                 await initMap().catch(err => {
                     console.error('地图加载失败：', err);
                     alert('地图加载失败（请检查API Key），仍可查看日记～');
                 });
 
-                // 如果有Excel数据，重新渲染日记
-                if (travelDiaryData.length > 2) {
-                    renderTravelDiary();
-                }
+                // 强制渲染旅游日记（无论Excel数据多少）
+                renderTravelDiary();
 
                 // 更新备忘录（优先Excel数据）
                 renderMemo();
@@ -325,7 +323,7 @@
             }
         });
 
-        // ========== Excel读取逻辑（失败不影响登录） ==========
+        // ========== Excel读取逻辑（修复旅游日记读取后不渲染问题） ==========
         async function loadExcelData() {
             const response = await fetch(EXCEL_FILE_URL);
             if (!response.ok) {
@@ -334,7 +332,7 @@
             const arrayBuffer = await response.arrayBuffer();
             const workbook = XLSX.read(arrayBuffer, { type: 'array' });
 
-            // 解析账号信息
+            // 解析账号信息（sheet1）
             if (workbook.Sheets['账号信息']) {
                 const accountSheet = workbook.Sheets['账号信息'];
                 const accountJson = XLSX.utils.sheet_to_json(accountSheet);
@@ -346,24 +344,28 @@
                         };
                     }
                 });
+                console.log('账号信息读取成功：', accountData);
             }
 
-            // 解析旅游日记
+            // 解析旅游日记（sheet2）- 强制替换测试数据
             if (workbook.Sheets['旅游日记']) {
                 const diarySheet = workbook.Sheets['旅游日记'];
-                travelDiaryData = XLSX.utils.sheet_to_json(diarySheet);
+                const excelDiaryData = XLSX.utils.sheet_to_json(diarySheet);
+                // 仅当Excel中有数据时替换
+                if (excelDiaryData.length > 0) {
+                    travelDiaryData = excelDiaryData;
+                }
+                console.log('旅游日记读取成功：', travelDiaryData);
             }
-
-            console.log('Excel数据加载成功：', { accountData, travelDiaryData });
         }
 
-        // ========== 地图初始化（简化+容错） ==========
+        // ========== 地图初始化（优化Key检查+支持多城市高亮） ==========
         async function initMap() {
             if (typeof AMap === 'undefined') {
-                throw new Error('高德地图API未加载，请替换有效的API Key');
+                throw new Error('高德地图API未加载，请检查API Key是否有效');
             }
 
-            // 初始化地图
+            // 初始化地图（优化配置保证显示）
             map = new AMap.Map('mapContainer', {
                 zoom: 4,
                 center: [105.000000, 36.000000],
@@ -371,7 +373,9 @@
                 resizeEnable: true,
                 showLabel: true,
                 zoomEnable: true,
-                dragEnable: true
+                dragEnable: true,
+                doubleClickZoom: true,
+                keyboardEnable: true
             });
 
             // 等待地图加载完成
@@ -379,20 +383,35 @@
                 map.on('complete', resolve);
             });
 
-            // 高亮关联城市
-            const cityList = travelDiaryData.map(item => item.关联城市).filter(Boolean);
-            if (cityList.length > 0) {
+            // 收集所有需要高亮的城市（处理顿号分隔）
+            let allCities = [];
+            travelDiaryData.forEach(item => {
+                if (item.关联城市) {
+                    // 拆分顿号分隔的城市
+                    const cities = item.关联城市.split('、').map(city => city.trim()).filter(Boolean);
+                    allCities = [...allCities, ...cities];
+                }
+            });
+            // 去重
+            allCities = [...new Set(allCities)];
+
+            // 高亮所有关联城市
+            if (allCities.length > 0) {
                 AMap.plugin('AMap.DistrictSearch', () => {
                     const districtSearch = new AMap.DistrictSearch({
                         level: 'city',
-                        extensions: 'all'
+                        extensions: 'all',
+                        subdistrict: 0
                     });
 
-                    cityList.forEach(city => {
+                    allCities.forEach(city => {
                         if (!city) return;
                         districtSearch.search(city, (status, result) => {
                             if (status === 'complete' && result.districtList.length > 0) {
-                                const bounds = result.districtList[0].boundaries;
+                                const district = result.districtList[0];
+                                const bounds = district.boundaries;
+                                const center = district.center;
+                                
                                 if (bounds) {
                                     // 城市高亮多边形（优化颜色，更柔和）
                                     const polygon = new AMap.Polygon({
@@ -407,7 +426,6 @@
                                     map.add(polygon);
 
                                     // 城市标记（优化样式）
-                                    const center = result.districtList[0].center;
                                     const marker = new AMap.Marker({
                                         position: center,
                                         title: city,
@@ -444,15 +462,26 @@
             }
 
             // 添加地图控件（缩放、定位）
-            AMap.plugin(['AMap.Scale', 'AMap.ToolBar'], () => {
+            AMap.plugin(['AMap.Scale', 'AMap.ToolBar', 'AMap.MapType'], () => {
                 map.addControl(new AMap.Scale());
                 map.addControl(new AMap.ToolBar({
                     position: 'RB' // 右下角
                 }));
+                map.addControl(new AMap.MapType({
+                    defaultType: 0,
+                    showTraffic: false
+                }));
             });
+
+            // 自适应地图视野到所有标记城市
+            if (allCities.length > 0) {
+                setTimeout(() => {
+                    map.setFitView();
+                }, 1000);
+            }
         }
 
-        // ========== 旅游日记渲染 ==========
+        // ========== 旅游日记渲染（修复Excel数据不显示+图片显示问题） ==========
         function renderTravelDiary() {
             const listContainer = document.getElementById('travelDiaryList');
             listContainer.innerHTML = '';
@@ -465,9 +494,8 @@
             travelDiaryData.forEach((item) => {
                 const card = document.createElement('div');
                 card.className = 'fluffy-card p-4 transition-all hover:shadow-cute hover:-translate-y-1';
-                const travelImage = item.旅游图片 && item.旅游图片.trim() 
-                    ? item.旅游图片.trim() 
-                    : getCitySceneryImage(item.关联城市);
+                // 获取图片（优先用关联城市生成）
+                const travelImage = getCitySceneryImage(item.关联城市);
                 
                 card.innerHTML = `
                     <h3 class="font-bold text-primary text-lg mb-3">${item.日记名称 || '未命名日记'}</h3>
@@ -497,7 +525,7 @@
             });
         }
 
-        // ========== 备忘录功能（增加保存） ==========
+        // ========== 备忘录功能（改为纯展示，移除编辑保存） ==========
         function renderMemo() {
             const memoContent = document.getElementById('memoContent');
             memoContent.value = accountData[currentUser]?.备忘录 || '暂无备忘录～';
@@ -506,10 +534,6 @@
         // 打开备忘录
         document.getElementById('memoBtn').addEventListener('click', () => {
             document.getElementById('memoModal').classList.remove('hidden');
-            // 聚焦输入框
-            setTimeout(() => {
-                document.getElementById('memoContent').focus();
-            }, 200);
         });
 
         // 关闭备忘录
@@ -522,14 +546,6 @@
             if (e.target === document.getElementById('memoModal')) {
                 document.getElementById('memoModal').classList.add('hidden');
             }
-        });
-
-        // 保存备忘录
-        document.getElementById('saveMemoBtn').addEventListener('click', () => {
-            const memoContent = document.getElementById('memoContent').value.trim();
-            accountData[currentUser].备忘录 = memoContent || '暂无备忘录～';
-            alert('备忘录保存成功啦～');
-            document.getElementById('memoModal').classList.add('hidden');
         });
 
         // ========== 适配与优化 ==========
@@ -550,19 +566,6 @@
         window.addEventListener('beforeunload', () => {
             if (map) {
                 map.destroy();
-            }
-        });
-
-        // 阻止文本框回车提交
-        document.getElementById('memoContent').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.ctrlKey) {
-                e.preventDefault();
-                // 允许换行
-                const textarea = e.target;
-                const start = textarea.selectionStart;
-                const end = textarea.selectionEnd;
-                textarea.value = textarea.value.substring(0, start) + '\n' + textarea.value.substring(end);
-                textarea.selectionStart = textarea.selectionEnd = start + 1;
             }
         });
     </script>
